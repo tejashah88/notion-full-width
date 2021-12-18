@@ -164,8 +164,9 @@ if __name__ == '__main__':
     client = FullWidthSetterClient(email=email)
 
     # Fetch all pages that will be altered
-    print('Fetching all pages to iterate through...')
     target_space = client.fetch_single_space()
+    
+    print('Fetching all pages to iterate through...')
     target_pages = client.fetch_pages_in_space(target_space, rate_limit_delay)
 
     # Process through all the pages
