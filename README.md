@@ -7,10 +7,10 @@ A simple Python CLI tool to set the "Full width" option for all pages across a N
 * Prompts you to select the workspace if it encounters multiple workspaces.
 * Gracefully **skips** over pages which the user doesn't have edit access.
 
-## Notice
+## README before running the script
 * If you used a 3rd-party provider like Google to login, you'll need to set an explicit password.
     * Go to "Settings & Members" > "My Account" > "Password" > "Set a password"
-* If you try to run this tool too many times, you'll get a 429 Rate Limited error from trying to login too many times.
+* If you try to run this tool too many times, you'll get a 429 Rate Limited error from trying to login too many times. You will be locked out from logging back in for **at least 1 hour**.
 
 ## Usage
 
