@@ -76,14 +76,54 @@ class FullWidthSetterClient:
         return selected_space
 
 
-    def fetch_pages_in_space(self, space):
+    def _search(self, space, limit=100):
+        data = {
+            "type": 'BlocksInSpace',
+            "query": '',
+            "spaceId": space.id,
+            "limit": limit,
+            "filters": {
+                "isDeletedOnly": False,
+                "excludeTemplates": False,
+                "isNavigableOnly": False,
+                "requireEditPermissions": False,
+                "ancestors": [],
+                "createdBy": [],
+                "editedBy": [],
+                "lastEditedTime": {},
+                "createdTime": {},
+            },
+            "sort": 'Relevance',
+            "source": 'quick_find',
+        }
+
+        return self.notion.post("search", data).json()
+
+
+    def fetch_pages_in_space(self, space, delay=DEFAULT_DELAY):
         """
         Fetches all pages within a workspace.
         """
-        client.notion.current_space = target_space
-        blocks = self.notion.search()
-        pages = [block for block in blocks if type(block) == PageBlock]
-        return pages
+
+        # First query search with limit = 1 to get total number of blocks
+        res_limit_1 = self._search(space, 1)
+        total_blocks = res_limit_1['total']
+
+        # Sleep for a bit to avoid potential rate limiting
+        sleep(delay)
+
+        # Now query search to fetch all blocks
+        res_limit_all = self._search(space, total_blocks)
+
+        # NOTE: This call is required for self.notion.get_block to work properly
+        self.notion._store.store_recordmap(res_limit_all['recordMap'])
+
+        # Sort for the page blocks
+        all_block_ids = list(res_limit_all['recordMap']['block'].keys())
+        all_blocks = [self.notion.get_block(block_id) for block_id in all_block_ids]
+        all_pages = [block for block in all_blocks if type(block) == PageBlock]
+
+        return all_pages
 
 
     # Source: https://github.com/jamalex/notion-py/pull/284
@@ -139,7 +179,7 @@ if __name__ == '__main__':
 
     # Fetch all pages that will be altered
     target_space = client.fetch_single_space()
-    target_pages = client.fetch_pages_in_space(target_space)
+    target_pages = client.fetch_pages_in_space(target_space, rate_limit_delay)
 
     # Process through all the pages
     pbar = tqdm(target_pages)
@@ -157,4 +197,4 @@ if __name__ == '__main__':
         # Source: https://developers.notion.com/reference/errors#rate-limits
         sleep(rate_limit_delay)
 
-    print(f'Successfully edited {total - failed} out of {total} pages!')
+    print(f'Successfully altered {total - failed} out of {total} pages!')
