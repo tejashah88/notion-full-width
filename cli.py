@@ -30,6 +30,7 @@ class FullWidthSetterClient:
         """
         Fetches the list of workspaces that the user is NOT a guest in.
         """
+
         email_uid = self.notion.get_email_uid()[self.email]
 
         spaces_json = self.notion.post("getSpaces", {}).json()
@@ -42,6 +43,7 @@ class FullWidthSetterClient:
         """
         When presented with multiple workspaces to select, prompt the user for the intended workspace.
         """
+
         selected_index = -1
 
         while True:
@@ -66,6 +68,7 @@ class FullWidthSetterClient:
         """
         Fetches a single workspace, prompting the user if they are part of multiple workspaces.
         """
+
         spaces = self.fetch_spaces()
 
         if len(spaces) > 1:
@@ -76,28 +79,19 @@ class FullWidthSetterClient:
         return selected_space
 
 
-    def _search(self, space, limit=100):
-        data = {
-            "type": 'BlocksInSpace',
-            "query": '',
-            "spaceId": space.id,
-            "limit": limit,
-            "filters": {
-                "isDeletedOnly": False,
-                "excludeTemplates": False,
-                "isNavigableOnly": False,
-                "requireEditPermissions": False,
-                "ancestors": [],
-                "createdBy": [],
-                "editedBy": [],
-                "lastEditedTime": {},
-                "createdTime": {},
-            },
-            "sort": 'Relevance',
-            "source": 'quick_find',
-        }
+    def _fetch_pages_recursively(self, page):
+        """
+        Iterates through a page's children and dives into the child pages.
+        """
 
-        return self.notion.post("search", data).json()
+        pages = []
+
+        for child in page.children:
+            if type(child) == PageBlock:
+                pages += [child]
+                pages += self._fetch_pages_recursively(child)
+
+        return pages
 
 
     def fetch_pages_in_space(self, space, delay=DEFAULT_DELAY):
@@ -105,25 +99,16 @@ class FullWidthSetterClient:
         Fetches all pages within a workspace.
         """
 
-        # First query search with limit = 1 to get total number of blocks
-        res_limit_1 = self._search(space, 1)
-        total_blocks = res_limit_1['total']
+        # First fetch all top level pages
+        root_pages = self.notion.get_top_level_pages()
 
-        # Sleep for a bit to avoid potential rate limiting
-        sleep(delay)
+        # Then iterate through the tree hiearchy of pages from those root pages
+        all_pages = root_pages
+        for root_page in root_pages:
+            all_pages += self._fetch_pages_recursively(root_page)
 
-        # Now query search to fetch all blocks
-        res_limit_all = self._search(space, total_blocks)
-
-        # NOTE: This call is required for self.notion.get_block to work properly
-        self.notion._store.store_recordmap(res_limit_all['recordMap'])
-
-        # Sort for the page blocks
-        all_block_ids = list(res_limit_all['recordMap']['block'].keys())
-        all_blocks = [self.notion.get_block(block_id) for block_id in all_block_ids]
-        all_pages = [block for block in all_blocks if type(block) == PageBlock]
-
-        return all_pages
+        all_unique_pages = list(set(all_pages))
+        return all_unique_pages
 
 
     # Source: https://github.com/jamalex/notion-py/pull/284
@@ -131,6 +116,7 @@ class FullWidthSetterClient:
         """
         Sets the full width setting for the selected page.
         """
+
         args = {"page_full_width": full_width}
 
         try:
@@ -178,6 +164,7 @@ if __name__ == '__main__':
     client = FullWidthSetterClient(email=email)
 
     # Fetch all pages that will be altered
+    print('Fetching all pages to iterate through...')
     target_space = client.fetch_single_space()
     target_pages = client.fetch_pages_in_space(target_space, rate_limit_delay)
 
